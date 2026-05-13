@@ -110,7 +110,7 @@ def cron_ml():
 @app.route("/")
 @login_required
 def dashboard():
-    indices = get_indices_snapshot()
+    indices = get_indices_snapshot(Config.INDEX_TICKERS)
     notifs = db.list_notifications(current_user.id, unread_only=True, limit=10)
     rec_count = len(db.list_recommendations(status="OPEN"))
     alert_count = len(db.list_alerts(current_user.id))
@@ -220,13 +220,22 @@ def market():
 @login_required
 def stock_detail(ticker):
     tf = request.args.get("tf", "1d")
-    ohlcv = get_ohlcv(ticker, period="6mo", interval=tf)
-    indicators = compute_indicators(ohlcv) if ohlcv is not None else {}
-    patterns = detect_patterns(ohlcv) if ohlcv is not None else []
-    scores = score_timeframe(ticker)
-    analysis = analyze_ticker(ticker)
-    news = aggregate_news(ticker, limit=10)
-    win_prob = predict_win_probability(ticker)
+    market = request.args.get("market", "NSE")
+    ohlcv = get_ohlcv(ticker, timeframe=tf)
+    indicators = compute_indicators(ohlcv) if not ohlcv.empty else {}
+    patterns = detect_patterns(ohlcv) if not ohlcv.empty else []
+    scores = score_timeframe(ohlcv)
+    analysis = analyze_ticker(ticker, market)
+    news = aggregate_news()
+    if analysis and not analysis.get("rejected"):
+        win_prob = predict_win_probability(
+            score=analysis.get("score", 5.0),
+            rr_ratio=analysis.get("rr_ratio", 2.0),
+            holding_days=analysis.get("holding_days", 7),
+            style=analysis.get("style", "swing"),
+        )
+    else:
+        win_prob = 0.5
     return render_template("stock_detail.html", ticker=ticker, tf=tf,
                            indicators=indicators, patterns=patterns,
                            scores=scores, analysis=analysis,
@@ -352,8 +361,8 @@ def add_note():
 @login_required
 def media():
     ticker = request.args.get("ticker", "RELIANCE.NS")
-    news = aggregate_news(ticker, limit=20)
-    social = aggregate_social(ticker)
+    news = aggregate_news()
+    social = aggregate_social()
     leaders = media_leaderboard()
     return render_template("media.html", ticker=ticker,
                            news=news, social=social, leaders=leaders,
@@ -435,7 +444,7 @@ def report_pdf():
 @login_required
 def api_ohlcv(ticker):
     tf = request.args.get("tf", "1d")
-    df = get_ohlcv(ticker, period="6mo", interval=tf)
+    df = get_ohlcv(ticker, timeframe=tf)
     if df is None or df.empty:
         return jsonify([])
     out = []

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Login — Stock Analyst Pro{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">📈 Stock Analyst Pro</div>
+    <p class="muted">The smartest stock analysis platform — USA · NSE · MCX · Crypto.</p>
+    <form method="POST">
+      <label>Username</label>
+      <input name="username" required autofocus value="admin"/>
+      <label>Password</label>
+      <input type="password" name="password" required value="admin123"/>
+      <button class="btn-primary full" type="submit">Sign in</button>
+    </form>
+    <p class="hint">Default credentials: <code>admin / admin123</code> — change after first login via DB or env vars.</p>
+  </div>
+</div>
+{% endblock %}

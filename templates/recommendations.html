@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ style.title() }} Recommendations{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ style.title() }} Recommendations</h1>
+<div class="seg-toggle">
+  <a class="seg {{ 'active' if style=='intraday' else '' }}" href="?style=intraday">⚡ Intraday</a>
+  <a class="seg {{ 'active' if style=='swing' else '' }}" href="?style=swing">📊 Swing</a>
+</div>
+<div class="quick-actions">
+  <button class="btn-primary" onclick="scan('NSE','{{ style }}')">Scan NSE</button>
+  <button class="btn-primary" onclick="scan('US','{{ style }}')">Scan US</button>
+  <button class="btn-primary" onclick="scan('CRYPTO','{{ style }}')">Scan Crypto</button>
+  <button class="btn-primary" onclick="scan('MCX','{{ style }}')">Scan MCX</button>
+  <a class="btn-secondary" href="{{ url_for('download', what='recommendations', fmt='csv') }}">⬇ CSV</a>
+  <a class="btn-secondary" href="{{ url_for('download', what='recommendations', fmt='pdf') }}">⬇ PDF</a>
+</div>
+
+<h2>Open Recommendations</h2>
+<div class="reco-list">
+{% for r in open_recs %}
+  <div class="reco-card {{ 'pos' if r.side == 'BUY' else 'neg' }}">
+    <div class="reco-head">
+      <span class="r-tk"><a href="{{ url_for('stock_detail', ticker=r.ticker) }}">{{ r.ticker }}</a></span>
+      <span class="r-side">{{ r.side }}</span>
+      <span class="r-tier">{{ r.tier }}</span>
+      <span class="r-score">Score {{ r.score }}/10</span>
+      <span class="r-wp">AI Win Prob: <b>{{ r.win_prob }}%</b></span>
+    </div>
+    <div class="reco-grid">
+      <div><span>Entry</span><b>{{ r.entry }}</b></div>
+      <div><span>T1</span><b>{{ r.target1 }}</b></div>
+      <div><span>T2</span><b>{{ r.target2 }}</b></div>
+      <div><span>SL</span><b>{{ r.stop_loss }}</b></div>
+      <div><span>R:R</span><b>1:{{ r.rr_ratio }}</b></div>
+      <div><span>Live</span><b>{{ r.live_price or '—' }}</b></div>
+    </div>
+    <p>{{ r.rationale }}</p>
+    {% if r.pattern %}<p class="muted">Pattern: {{ r.pattern }}</p>{% endif %}
+    <p class="muted">Risks: {{ r.risks }}</p>
+  </div>
+{% else %}
+  <p class="muted">No open recommendations yet. Run a scan above.</p>
+{% endfor %}
+</div>
+
+<h2>Closed (History)</h2>
+<table class="data-table">
+  <thead><tr><th>Ticker</th><th>Style</th><th>Side</th><th>Status</th><th>Final P&L %</th><th>Created</th><th>Closed</th></tr></thead>
+  <tbody>
+  {% for r in closed if r.status != 'OPEN' %}
+    <tr>
+      <td><a href="{{ url_for('stock_detail', ticker=r.ticker) }}">{{ r.ticker }}</a></td>
+      <td>{{ r.style }}</td><td>{{ r.side }}</td>
+      <td>{{ r.status }}</td>
+      <td class="{{ 'pos' if (r.final_pnl_pct or 0)>=0 else 'neg' }}">{{ '{:+.2f}'.format(r.final_pnl_pct or 0) }}%</td>
+      <td>{{ r.created_at|truncate(16, true, '') }}</td>
+      <td>{{ (r.closed_at or '')|truncate(16, true, '') }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<script>
+async function scan(market, style) {
+  const r = await fetch('/api/scan', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({market, style}),
+  });
+  const j = await r.json();
+  alert(`Scan complete — ${j.count} recommendations saved. Page will refresh.`);
+  location.reload();
+}
+</script>
+{% endblock %}

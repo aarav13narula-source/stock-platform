@@ -1,0 +1,14 @@
+Flask==3.0.3
+Flask-Login==0.6.3
+Werkzeug==3.0.3
+yfinance==0.2.50
+pandas==2.2.3
+numpy==1.26.4
+scikit-learn==1.5.2
+requests==2.32.3
+beautifulsoup4==4.12.3
+feedparser==6.0.11
+textblob==0.18.0
+reportlab==4.2.5
+python-dotenv==1.0.1
+firebase-admin==6.5.0

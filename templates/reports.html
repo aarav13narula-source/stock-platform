@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h1 class="page-title">📑 Reports</h1>
+<p class="muted">Download everything as CSV or PDF — recommendations, audit trail, paper trades, self-notes.</p>
+
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="kpi-label">Intraday accuracy</div><div class="kpi-value">{{ acc_intra.accuracy }}%</div></div>
+  <div class="kpi-card"><div class="kpi-label">Swing accuracy</div><div class="kpi-value">{{ acc_swing.accuracy }}%</div></div>
+  <div class="kpi-card">
+    <div class="kpi-label">Paper P&amp;L</div>
+    <div class="kpi-value {{ 'pos' if paper.total_pnl>=0 else 'neg' }}">₹{{ '{:,.0f}'.format(paper.total_pnl) }}</div>
+    <div class="kpi-sub">{{ paper.pnl_pct }}% on ₹{{ '{:,.0f}'.format(paper.total_invested) }}</div>
+  </div>
+</div>
+
+<h2>Downloads</h2>
+<div class="report-grid">
+  <div class="rep-card"><h3>Recommendations</h3>
+    <a class="btn-primary" href="{{ url_for('download', what='recommendations', fmt='csv') }}">CSV</a>
+    <a class="btn-primary" href="{{ url_for('download', what='recommendations', fmt='pdf') }}">PDF</a>
+  </div>
+  <div class="rep-card"><h3>Audit Log</h3>
+    <a class="btn-primary" href="{{ url_for('download', what='audit', fmt='csv') }}">CSV</a>
+    <a class="btn-primary" href="{{ url_for('download', what='audit', fmt='pdf') }}">PDF</a>
+  </div>
+  <div class="rep-card"><h3>Paper Trades</h3>
+    <a class="btn-primary" href="{{ url_for('download', what='paper', fmt='csv') }}">CSV</a>
+    <a class="btn-primary" href="{{ url_for('download', what='paper', fmt='pdf') }}">PDF</a>
+  </div>
+  <div class="rep-card"><h3>Self Notes</h3>
+    <a class="btn-primary" href="{{ url_for('download', what='notes', fmt='csv') }}">CSV</a>
+    <a class="btn-primary" href="{{ url_for('download', what='notes', fmt='pdf') }}">PDF</a>
+  </div>
+</div>
+{% endblock %}

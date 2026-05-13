@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ market }} Market{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ market }} Market</h1>
+<p class="muted">Live quotes with auto-refresh every 15 minutes. Click any ticker to open the deep-dive page with TradingView chart, indicators and AI recommendation.</p>
+
+<div class="ticker-grid wider">
+  {% for q in quotes %}
+  <a class="ticker-card big {{ 'pos' if q.change_pct and q.change_pct > 0 else 'neg' if q.change_pct and q.change_pct < 0 else '' }}"
+     href="{{ url_for('stock_detail', ticker=q.ticker) }}">
+    <div class="t-name">{{ q.ticker }}</div>
+    <div class="t-price">{{ q.price if q.price else '—' }}</div>
+    <div class="t-chg">{{ '{:+.2f}'.format(q.change_pct) if q.change_pct is not none else '' }}%</div>
+    <div class="t-sub">Vol: {{ '{:,}'.format(q.volume) if q.volume else '—' }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

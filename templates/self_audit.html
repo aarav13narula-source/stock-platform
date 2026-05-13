@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Self Audit{% endblock %}
+{% block content %}
+<h1 class="page-title">🧠 Self Audit — Honest Track Record</h1>
+<p class="muted">Every recommendation is tracked with a hypothetical ₹1,00,000 investment.
+  We never hide losses. The AI learns from every mistake and the lessons are listed below under <b>Self Notes</b>.</p>
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Intraday Accuracy</div>
+    <div class="kpi-value">{{ acc_intra.accuracy }}%</div>
+    <div class="kpi-sub">{{ acc_intra.wins }}W / {{ acc_intra.losses }}L (avg P&L {{ acc_intra.avg_pnl }}%)</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Swing Accuracy</div>
+    <div class="kpi-value">{{ acc_swing.accuracy }}%</div>
+    <div class="kpi-sub">{{ acc_swing.wins }}W / {{ acc_swing.losses }}L (avg P&L {{ acc_swing.avg_pnl }}%)</div>
+  </div>
+</div>
+
+<h2>Trade Audit Log (₹1,00,000 hypothetical each)</h2>
+<table class="data-table">
+<thead><tr><th>Ticker</th><th>Style</th><th>Invested</th><th>Final Value</th><th>P&L %</th><th>Outcome</th><th>Reason</th><th>Closed</th></tr></thead>
+<tbody>
+{% for a in audits %}
+<tr>
+  <td>{{ a.ticker }}</td><td>{{ a.style }}</td>
+  <td>₹{{ '{:,.0f}'.format(a.invested) }}</td>
+  <td>₹{{ '{:,.0f}'.format(a.final_value) }}</td>
+  <td class="{{ 'pos' if a.pnl_pct>=0 else 'neg' }}"><b>{{ '{:+.2f}'.format(a.pnl_pct) }}%</b></td>
+  <td><span class="pill {{ a.outcome|lower }}">{{ a.outcome }}</span></td>
+  <td>{{ a.reason }}</td>
+  <td>{{ a.closed_at|truncate(16, true, '') }}</td>
+</tr>
+{% else %}
+<tr><td colspan="8" class="muted">No closed trades yet. Run a scan, let it auto-track, and come back later.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+<p>Each row reads: <i>"If you had invested ₹1,00,000 in {{ '<ticker>' }}, it would now be worth {{ '<final value>' }} — a {{ '<P&L>' }}% return."</i></p>
+
+<h2>📝 Self Notes — What the AI Has Learned</h2>
+<div class="notes">
+{% for n in notes %}
+  <div class="note-card cat-{{ n.category }}">
+    <div class="note-meta">{{ n.category }} · {{ n.created_at|truncate(16, true, '') }}</div>
+    <div><b>{{ n.note }}</b></div>
+    <div>{{ n.lesson }}</div>
+  </div>
+{% else %}
+<p class="muted">No notes yet. The AI generates a note every time a paper trade closes.</p>
+{% endfor %}
+</div>
+
+<h2>📐 Current Indicator Weights (auto-tuning)</h2>
+<table class="data-table">
+<thead><tr><th>Indicator</th><th>Weight</th><th>Wins</th><th>Losses</th><th>Last Updated</th></tr></thead>
+<tbody>
+{% for k, w in weights.items() %}
+<tr>
+  <td><b>{{ k }}</b></td>
+  <td>{{ '{:.3f}'.format(w.weight) }}</td>
+  <td>{{ w.wins }}</td><td>{{ w.losses }}</td>
+  <td>{{ w.last_updated|truncate(16, true, '') }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<p class="muted small">Reinforcement learning bumps weights up after wins, trims them after losses.
+Supervised SGDClassifier + KMeans cluster model re-fit every hour for win-probability scoring.</p>
+
+<div class="quick-actions">
+  <a class="btn-secondary" href="{{ url_for('download', what='audit', fmt='csv') }}">⬇ Audit CSV</a>
+  <a class="btn-secondary" href="{{ url_for('download', what='audit', fmt='pdf') }}">⬇ Audit PDF</a>
+  <a class="btn-secondary" href="{{ url_for('download', what='notes', fmt='csv') }}">⬇ Notes CSV</a>
+  <a class="btn-secondary" href="{{ url_for('download', what='notes', fmt='pdf') }}">⬇ Notes PDF</a>
+</div>
+{% endblock %}

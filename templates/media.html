@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Media & Social Leaderboard{% endblock %}
+{% block content %}
+<h1 class="page-title">📰 Media & Social Leaderboard</h1>
+<p class="muted">Aggregates Google News (Moneycontrol, ET Markets, Bloomberg, Reuters via RSS) and Reddit
+(r/IndianStockMarket, r/stocks, r/CryptoCurrency). Sentiment scored with NLP; top mentions ranked here.</p>
+
+<div class="layout-2">
+  <div>
+    <h2>🚀 Top 5 BUY Buzz</h2>
+    <table class="data-table">
+    <thead><tr><th>Ticker</th><th>Mentions</th><th>+ / −</th><th>Sample Headlines</th></tr></thead>
+    <tbody>
+    {% for b in leaderboard.buys %}
+    <tr>
+      <td><b>{{ b.ticker }}</b></td>
+      <td>{{ b.mentions }}</td>
+      <td><span class="pos">+{{ b.pos }}</span> / <span class="neg">−{{ b.neg }}</span></td>
+      <td><ul class="src-list">
+        {% for s in b.sources %}<li><a href="{{ s.link }}" target="_blank">{{ s.title }}</a></li>{% endfor %}
+      </ul></td>
+    </tr>
+    {% else %}<tr><td colspan="4" class="muted">No buzz right now.</td></tr>{% endfor %}
+    </tbody>
+    </table>
+  </div>
+  <div>
+    <h2>🔻 Top 5 SELL Buzz</h2>
+    <table class="data-table">
+    <thead><tr><th>Ticker</th><th>Mentions</th><th>+ / −</th><th>Sample Headlines</th></tr></thead>
+    <tbody>
+    {% for b in leaderboard.sells %}
+    <tr>
+      <td><b>{{ b.ticker }}</b></td>
+      <td>{{ b.mentions }}</td>
+      <td><span class="pos">+{{ b.pos }}</span> / <span class="neg">−{{ b.neg }}</span></td>
+      <td><ul class="src-list">
+        {% for s in b.sources %}<li><a href="{{ s.link }}" target="_blank">{{ s.title }}</a></li>{% endfor %}
+      </ul></td>
+    </tr>
+    {% else %}<tr><td colspan="4" class="muted">No bearish buzz right now.</td></tr>{% endfor %}
+    </tbody>
+    </table>
+  </div>
+</div>
+
+<h2>📰 Latest News Feeds</h2>
+<div class="news-tabs">
+{% for label, items in news.items() %}
+  <div class="news-col">
+    <h3>{{ label }}</h3>
+    <ul class="news-list">
+    {% for it in items[:8] %}
+      <li>
+        <span class="sent {{ it.sentiment }}">●</span>
+        <a href="{{ it.link }}" target="_blank">{{ it.title }}</a>
+      </li>
+    {% endfor %}
+    </ul>
+  </div>
+{% endfor %}
+</div>
+
+<h2>💬 Reddit Buzz</h2>
+<div class="news-tabs">
+{% for label, items in social.items() %}
+  <div class="news-col">
+    <h3>r/{{ label }}</h3>
+    <ul class="news-list">
+    {% for it in items[:8] %}
+      <li>
+        <span class="sent {{ it.sentiment }}">●</span>
+        <a href="{{ it.link }}" target="_blank">{{ it.title }}</a>
+        <span class="muted small"> · ▲{{ it.ups }}</span>
+      </li>
+    {% endfor %}
+    </ul>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

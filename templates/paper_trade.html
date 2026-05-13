@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Paper Trade Game{% endblock %}
+{% block content %}
+<h1 class="page-title">🎮 Paper Trade Game</h1>
+<p class="muted">Every AI recommendation auto-invests a dummy ₹1,00,000.
+You can <b>swap</b> any open trade to a different stock to try your own ideas.
+P&amp;L tracks live and we evaluate against T1/T2/SL automatically.</p>
+
+<div class="seg-toggle">
+  <a class="seg {{ 'active' if style=='intraday' else '' }}" href="?style=intraday">⚡ Intraday</a>
+  <a class="seg {{ 'active' if style=='swing' else '' }}" href="?style=swing">📊 Swing</a>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="kpi-label">Open Trades</div><div class="kpi-value">{{ summary.open_count }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Closed Trades</div><div class="kpi-value">{{ summary.closed_count }}</div></div>
+  <div class="kpi-card"><div class="kpi-label">Win Rate</div><div class="kpi-value">{{ summary.win_rate }}%</div></div>
+  <div class="kpi-card">
+    <div class="kpi-label">Net P&amp;L</div>
+    <div class="kpi-value {{ 'pos' if summary.total_pnl >=0 else 'neg' }}">
+      ₹{{ '{:,.0f}'.format(summary.total_pnl) }}
+    </div>
+    <div class="kpi-sub">{{ summary.pnl_pct }}%</div>
+  </div>
+</div>
+
+<div class="quick-actions">
+  <button class="btn-primary" onclick="evaluateNow()">🔄 Mark to market now</button>
+  <a class="btn-secondary" href="{{ url_for('download', what='paper', fmt='csv') }}">⬇ CSV</a>
+  <a class="btn-secondary" href="{{ url_for('download', what='paper', fmt='pdf') }}">⬇ PDF</a>
+</div>
+
+<h2>Open Trades</h2>
+<table class="data-table">
+<thead><tr><th>Ticker</th><th>Side</th><th>Qty</th><th>Entry</th><th>Live</th><th>Live P&L</th><th>Invested</th><th>Opened</th><th>Action</th></tr></thead>
+<tbody>
+{% for t in open_trades %}
+<tr>
+  <td><a href="{{ url_for('stock_detail', ticker=t.ticker) }}">{{ t.ticker }}</a></td>
+  <td>{{ t.side }}</td><td>{{ '{:.2f}'.format(t.qty) }}</td>
+  <td>{{ '{:.2f}'.format(t.entry_price) }}</td>
+  <td>{{ '{:.2f}'.format(t.live_price) if t.live_price else '—' }}</td>
+  <td class="{{ 'pos' if (t.live_pnl or 0)>=0 else 'neg' }}">
+    {% if t.live_pnl is not none %}
+      ₹{{ '{:,.0f}'.format(t.live_pnl) }} ({{ '{:+.2f}'.format(t.live_pnl_pct) }}%)
+    {% else %}—{% endif %}
+  </td>
+  <td>₹{{ '{:,.0f}'.format(t.invested) }}</td>
+  <td>{{ t.opened_at|truncate(16, true, '') }}</td>
+  <td>
+    <button class="btn-tiny" onclick="swap({{ t.id }}, '{{ t.ticker }}')">Swap</button>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="9" class="muted">No open paper trades. Run a scan from Recommendations.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+
+<h2>Closed Trades</h2>
+<table class="data-table">
+<thead><tr><th>Ticker</th><th>Entry</th><th>Exit</th><th>P&L</th><th>P&L %</th><th>Opened</th><th>Closed</th></tr></thead>
+<tbody>
+{% for t in closed_trades %}
+<tr>
+  <td>{{ t.ticker }}</td>
+  <td>{{ '{:.2f}'.format(t.entry_price) }}</td>
+  <td>{{ '{:.2f}'.format(t.exit_price) if t.exit_price else '—' }}</td>
+  <td class="{{ 'pos' if (t.pnl or 0)>=0 else 'neg' }}">₹{{ '{:,.0f}'.format(t.pnl or 0) }}</td>
+  <td class="{{ 'pos' if (t.pnl_pct or 0)>=0 else 'neg' }}">{{ '{:+.2f}'.format(t.pnl_pct or 0) }}%</td>
+  <td>{{ t.opened_at|truncate(16, true, '') }}</td>
+  <td>{{ (t.closed_at or '')|truncate(16, true, '') }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+<script>
+async function evaluateNow() {
+  const r = await fetch('/api/paper/evaluate', {method:'POST'});
+  const j = await r.json();
+  alert(`${j.closed} trade(s) closed.`);
+  location.reload();
+}
+async function swap(tradeId, oldTicker) {
+  const t = prompt(`Swap ${oldTicker} → new ticker (e.g. INFY.NS)`);
+  if (!t) return;
+  const r = await fetch(`/api/quote/${encodeURIComponent(t)}`);
+  const q = await r.json();
+  if (!q.price) { alert('Could not fetch quote'); return; }
+  if (!confirm(`Swap into ${t} @ ₹${q.price}?`)) return;
+  await fetch('/api/paper/swap', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({trade_id: tradeId, new_ticker: t, new_entry_price: q.price})});
+  location.reload();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="page-title">Dashboard</h1>
+<p class="muted">Market status — NSE: <b class="{{ 'ok' if market_status.NSE else 'off' }}">{{ 'OPEN' if market_status.NSE else 'CLOSED' }}</b>
+  · US: <b class="{{ 'ok' if market_status.US else 'off' }}">{{ 'OPEN' if market_status.US else 'CLOSED' }}</b>
+  · Crypto & MCX: <b class="ok">24×7</b></p>
+
+<!-- KPI summary -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Intraday Accuracy</div>
+    <div class="kpi-value">{{ acc_intra.accuracy }}%</div>
+    <div class="kpi-sub">{{ acc_intra.wins }} wins / {{ acc_intra.losses }} losses</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Swing Accuracy</div>
+    <div class="kpi-value">{{ acc_swing.accuracy }}%</div>
+    <div class="kpi-sub">{{ acc_swing.wins }} wins / {{ acc_swing.losses }} losses</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Paper-Trade P&amp;L</div>
+    <div class="kpi-value {{ 'pos' if paper.total_pnl >= 0 else 'neg' }}">
+      ₹{{ '{:,.0f}'.format(paper.total_pnl) }}
+    </div>
+    <div class="kpi-sub">{{ paper.pnl_pct }}% on ₹{{ '{:,.0f}'.format(paper.total_invested) }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Open Trades</div>
+    <div class="kpi-value">{{ paper.open_count }}</div>
+    <div class="kpi-sub">{{ paper.closed_count }} closed</div>
+  </div>
+</div>
+
+<!-- Index strip -->
+<h2>Global Indices</h2>
+<div class="ticker-grid">
+{% for i in indices %}
+  <div class="ticker-card {{ 'pos' if i.change_pct and i.change_pct > 0 else 'neg' if i.change_pct and i.change_pct < 0 else '' }}">
+    <div class="t-name">{{ i.name }}</div>
+    <div class="t-price">{{ i.price if i.price else '—' }}</div>
+    <div class="t-chg">{{ '{:+.2f}'.format(i.change_pct) if i.change_pct is not none else '' }}%</div>
+  </div>
+{% endfor %}
+</div>
+
+<!-- Quick actions -->
+<h2>Quick Scan</h2>
+<div class="quick-actions">
+  <button class="btn-primary" onclick="runScan('NSE','swing')">🎯 Top Swing — NSE</button>
+  <button class="btn-primary" onclick="runScan('NSE','intraday')">⚡ Top Intraday — NSE</button>
+  <button class="btn-primary" onclick="runScan('US','swing')">🇺🇸 Top Swing — US</button>
+  <button class="btn-primary" onclick="runScan('CRYPTO','swing')">₿ Top Crypto</button>
+  <button class="btn-primary" onclick="runScan('MCX','swing')">🪙 Top MCX</button>
+</div>
+<div id="scanResult"></div>
+
+<!-- TradingView mini chart -->
+<h2>Nifty 50 Live Chart (TradingView)</h2>
+<div class="tv-wrap">
+  <div id="tv_nifty" style="height:480px;"></div>
+</div>
+<script>
+new TradingView.widget({
+  container_id: "tv_nifty",
+  symbol: "NSE:NIFTY",
+  interval: "15",
+  theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
+  style: "1",
+  locale: "in",
+  enable_publishing: false,
+  hide_top_toolbar: false,
+  withdateranges: true,
+  allow_symbol_change: true,
+  studies: ["RSI@tv-basicstudies","MACD@tv-basicstudies","BB@tv-basicstudies"],
+  autosize: true,
+});
+</script>
+{% endblock %}

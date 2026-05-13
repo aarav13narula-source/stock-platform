@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Best Picks{% endblock %}
+{% block content %}
+<h1 class="page-title">🎯 Best Picks
+  <span class="muted small">— for {{ 'next session (markets closed)' if not market_status.NSE else 'right now (markets open)' }}</span>
+</h1>
+
+<div class="layout-2">
+  <div>
+    <h2>⚡ Intraday — Top Picks (Ranked)</h2>
+    {% for r in intraday %}
+    <div class="reco-card pos compact">
+      <div class="reco-head">
+        <span class="r-tk"><a href="{{ url_for('stock_detail', ticker=r.ticker) }}">{{ r.ticker }}</a></span>
+        <span class="r-tier">{{ r.tier }}</span>
+        <span>Score <b>{{ r.score }}</b></span>
+        <span>AI <b>{{ r.win_prob }}%</b></span>
+      </div>
+      <div class="reco-grid">
+        <div><span>Entry</span><b>{{ r.entry }}</b></div>
+        <div><span>T1</span><b>{{ r.target1 }}</b></div>
+        <div><span>T2</span><b>{{ r.target2 }}</b></div>
+        <div><span>SL</span><b>{{ r.stop_loss }}</b></div>
+      </div>
+      <p>{{ r.rationale }}</p>
+    </div>
+    {% else %}
+    <p class="muted">No intraday picks yet — run a scan from the Recommendations page.</p>
+    {% endfor %}
+  </div>
+
+  <div>
+    <h2>📊 Swing — Top Picks (Ranked)</h2>
+    {% for r in swing %}
+    <div class="reco-card pos compact">
+      <div class="reco-head">
+        <span class="r-tk"><a href="{{ url_for('stock_detail', ticker=r.ticker) }}">{{ r.ticker }}</a></span>
+        <span class="r-tier">{{ r.tier }}</span>
+        <span>Score <b>{{ r.score }}</b></span>
+        <span>AI <b>{{ r.win_prob }}%</b></span>
+      </div>
+      <div class="reco-grid">
+        <div><span>Entry</span><b>{{ r.entry }}</b></div>
+        <div><span>T1</span><b>{{ r.target1 }}</b></div>
+        <div><span>T2</span><b>{{ r.target2 }}</b></div>
+        <div><span>SL</span><b>{{ r.stop_loss }}</b></div>
+      </div>
+      <p>{{ r.rationale }}</p>
+    </div>
+    {% else %}
+    <p class="muted">No swing picks yet — run a scan from the Recommendations page.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

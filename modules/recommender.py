@@ -3,7 +3,7 @@ from datetime import datetime
 
 from modules.analyzer import compute_indicators, detect_patterns, score_timeframe, multi_timeframe_score
 from modules.data_fetcher import get_ohlcv, get_quote
-from modules import database as db
+from modules import firebase_db as db
 
 
 # Hard eliminators

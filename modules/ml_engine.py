@@ -1,46 +1,65 @@
-"""Self-learning engine.
+"""Self-learning ML engine — Vercel/Firebase edition.
 
 Combines:
-  • Supervised: tracks indicator weights and adjusts them per win/loss
-    (online stochastic learning with sklearn SGDClassifier on tabular features).
-  • Reinforcement: per-indicator weight nudges based on trade outcomes (REINFORCE-style).
-  • Unsupervised: KMeans clusters past trades into 'setup archetypes' and logs which
-    clusters perform best/worst so the engine learns to avoid bad archetypes.
+  • Supervised: SGDClassifier trained on closed trades (win/loss)
+  • Reinforcement: per-indicator weight nudges based on trade outcomes
+  • Unsupervised: KMeans setup archetypes
 
-After every closed paper trade the engine:
-  1. logs a self-note (visible in the Self-Audit tab),
-  2. adjusts indicator weights,
-  3. refits the supervised model and the cluster map.
+On Vercel, .pkl files cannot be persisted to disk. Models are stored
+as base64 JSON blobs inside Firestore (ml_model_blob / cluster_model_blob docs).
 """
+import base64
 import json
 import logging
 import math
 import pickle
 from datetime import datetime
-from pathlib import Path
 
 import numpy as np
 
-from config import DATA_DIR
-from modules import database as db
+from modules import firebase_db as db
 
 log = logging.getLogger(__name__)
 
-MODEL_PATH = DATA_DIR / "ml_model.pkl"
-CLUSTER_PATH = DATA_DIR / "cluster_model.pkl"
-
-
-# ------------------------------------------------------------------ #
-# Reinforcement weight updates
-# ------------------------------------------------------------------ #
 LEARNING_RATE = 0.05
 WEIGHT_FLOOR = 0.3
 WEIGHT_CAP = 2.5
 
 
+# ------------------------------------------------------------------ #
+# Firestore model persistence helpers
+# ------------------------------------------------------------------ #
+def _save_model_blob(key, obj):
+    """Pickle obj and store as base64 string in Firestore."""
+    try:
+        blob = base64.b64encode(pickle.dumps(obj)).decode()
+        _db_col().document(key).set({"blob": blob, "updated_at": datetime.utcnow().isoformat()})
+    except Exception as e:
+        log.warning("_save_model_blob error: %s", e)
+
+
+def _load_model_blob(key):
+    """Load pickled object from Firestore blob. Returns None if missing."""
+    try:
+        doc = _db_col().document(key).get()
+        if doc.exists:
+            blob = doc.to_dict().get("blob")
+            if blob:
+                return pickle.loads(base64.b64decode(blob))
+    except Exception as e:
+        log.warning("_load_model_blob error: %s", e)
+    return None
+
+
+def _db_col():
+    from firebase_admin import firestore as _fs
+    return _fs.client().collection("ml_models")
+
+
+# ------------------------------------------------------------------ #
+# Signal extraction
+# ------------------------------------------------------------------ #
 def _signals_from_rec(rec):
-    """Reconstruct which indicators contributed to a recommendation."""
-    # Very lightweight reconstruction from rationale + pattern fields
     rationale = (rec.get("rationale") or "").lower()
     sigs = []
     if "moving average" in rationale or "ema" in rationale: sigs.append("ema_cross")
@@ -56,6 +75,9 @@ def _signals_from_rec(rec):
     return sigs
 
 
+# ------------------------------------------------------------------ #
+# Reinforcement + self-notes
+# ------------------------------------------------------------------ #
 def learn_from_trade(rec_id, outcome, pnl_pct):
     """Called after every paper-trade close. Updates weights & self-notes."""
     rec = _load_rec(rec_id)
@@ -63,7 +85,6 @@ def learn_from_trade(rec_id, outcome, pnl_pct):
         return
     sigs = _signals_from_rec(rec)
     weights = db.get_ml_weights()
-    # Reinforcement nudges
     for ind in sigs:
         if ind not in weights:
             continue
@@ -77,7 +98,6 @@ def learn_from_trade(rec_id, outcome, pnl_pct):
         else:
             db.update_ml_weight(ind, cur, 0, 0)
 
-    # Generate a plain-English self-note
     if outcome == "WIN":
         lesson = (
             f"On {rec['ticker']}, the combination of {', '.join(sigs)} produced a "
@@ -100,7 +120,6 @@ def learn_from_trade(rec_id, outcome, pnl_pct):
         lesson=lesson, category=cat,
     )
 
-    # Retrain supervised + cluster models if enough data
     try:
         retrain_models()
     except Exception as e:
@@ -108,32 +127,35 @@ def learn_from_trade(rec_id, outcome, pnl_pct):
 
 
 # ------------------------------------------------------------------ #
-# Supervised + Unsupervised retraining
+# Supervised + Unsupervised retraining (Firestore data source)
 # ------------------------------------------------------------------ #
 def _gather_training_data():
-    """Build a small feature matrix from the audit log + recommendations table."""
-    from modules.database import get_conn
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT r.score, r.rr_ratio, r.holding_days, r.style,
-                      a.outcome, a.pnl_pct
-               FROM recommendations r JOIN audit_log a ON r.id = a.rec_id
-               WHERE a.outcome IS NOT NULL"""
-        ).fetchall()
-    X, y = [], []
-    for r in rows:
-        X.append([
-            r["score"] or 5,
-            r["rr_ratio"] or 1,
-            r["holding_days"] or 5,
-            1 if r["style"] == "swing" else 0,
-        ])
-        y.append(1 if r["outcome"] == "WIN" else 0)
-    return np.array(X), np.array(y)
+    """Build feature matrix from Firestore audit log + recommendations."""
+    try:
+        audit_rows = db.list_audit(limit=500)
+        X, y = [], []
+        for a in audit_rows:
+            rec_id = a.get("rec_id")
+            if not rec_id or a.get("outcome") is None:
+                continue
+            rec = _load_rec(rec_id)
+            if not rec:
+                continue
+            X.append([
+                rec.get("score") or 5,
+                rec.get("rr_ratio") or 1,
+                rec.get("holding_days") or 5,
+                1 if rec.get("style") == "swing" else 0,
+            ])
+            y.append(1 if a["outcome"] == "WIN" else 0)
+        return np.array(X), np.array(y)
+    except Exception as e:
+        log.warning("_gather_training_data error: %s", e)
+        return np.array([]), np.array([])
 
 
 def retrain_models():
-    """Refit supervised + cluster models if enough samples."""
+    """Refit supervised + cluster models and persist to Firestore."""
     X, y = _gather_training_data()
     if len(X) < 10:
         return False
@@ -145,15 +167,12 @@ def retrain_models():
         Xs = scaler.fit_transform(X)
         clf = SGDClassifier(loss="log_loss", max_iter=200, learning_rate="optimal")
         clf.fit(Xs, y)
-        with open(MODEL_PATH, "wb") as f:
-            pickle.dump({"clf": clf, "scaler": scaler}, f)
-        # Unsupervised cluster of all setups
+        _save_model_blob("clf_model", {"clf": clf, "scaler": scaler})
         if len(X) >= 6:
             n_clusters = min(4, max(2, len(X) // 5))
             km = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
             km.fit(Xs)
-            with open(CLUSTER_PATH, "wb") as f:
-                pickle.dump({"km": km, "scaler": scaler}, f)
+            _save_model_blob("cluster_model", {"km": km, "scaler": scaler})
         return True
     except Exception as e:
         log.warning("retrain models err: %s", e)
@@ -162,13 +181,12 @@ def retrain_models():
 
 def predict_win_probability(score, rr_ratio, holding_days, style):
     """Use the trained classifier to predict P(win) for a fresh setup."""
-    if not MODEL_PATH.exists():
-        # Heuristic fallback
+    obj = _load_model_blob("clf_model")
+    if obj is None:
+        # Heuristic fallback when no model trained yet
         base = 0.5 + (score - 5) * 0.05 + (rr_ratio - 1) * 0.03
         return float(max(0.05, min(0.95, base)))
     try:
-        with open(MODEL_PATH, "rb") as f:
-            obj = pickle.load(f)
         x = np.array([[score, rr_ratio, holding_days, 1 if style == "swing" else 0]])
         xs = obj["scaler"].transform(x)
         if hasattr(obj["clf"], "predict_proba"):
@@ -179,8 +197,11 @@ def predict_win_probability(score, rr_ratio, holding_days, style):
 
 
 def _load_rec(rec_id):
-    from modules.database import get_conn
-    with get_conn() as conn:
-        cur = conn.execute("SELECT * FROM recommendations WHERE id=?", (rec_id,))
-        r = cur.fetchone()
-        return dict(r) if r else None
+    try:
+        recs = db.list_recommendations(limit=1000)
+        for r in recs:
+            if str(r.get("id")) == str(rec_id):
+                return r
+    except Exception:
+        pass
+    return None
